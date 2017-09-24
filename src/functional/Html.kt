@@ -1,10 +1,12 @@
-package com.outsitenetworks.allpointsrewards.functional.experimental
+@file:Suppress("unused")
+
+package functional
 
 @DslMarker
 annotation class HtmlMarker
 
 @HtmlMarker
-open class Tag(val name: String) {
+open class Tag(private val name: String) {
     private val children = mutableListOf<Tag>()
 
     protected fun <T : Tag> doInit(child: T, init: T.() -> Unit) {
@@ -69,7 +71,7 @@ fun buildDropdown() = createHTML().div(classes = "dropdown") {
         li { a("#") { +"Action" } }
         li { a("#") { +"Action action" } }
         li { role = "separator"; classes = setOf("divider") }
-        li { classes = setOf("dividerdropdown-header"); +"Header" }
+        li { classes = setOf("divider-dropdown-header"); +"Header" }
     }
 }
 

@@ -1,49 +1,66 @@
-import functional.io.*
+import functional.either.Either
+import functional.either.left
+import functional.either.right
+import functional.io.IO
+import functional.io.bind
+import functional.io.printlnIO
+import functional.io.readLineIO
+import functional.io.toIO
+import functional.io.whileRight
 
-val startGame: IO<Unit> = numberGame(1, 100)
+typealias Guess = IntRange
 
-fun guess(min: Int, max: Int): Int = (min + max) / 2
+typealias Next = Either<Unit, Guess>
 
-fun numberGame(min: Int, max: Int): IO<Unit> =
-    printlnIO("Is your number ${guess(min, max)}")
-        .bind { readLineIO() }
-        .bind { a ->
-            if (a == "y") printlnIO("Do you want to play again?")
-                .bind { readLineIO() }
-                .bind { a2 ->
-                    if (a2 == "y") startGame
-                    else Unit.lift()
-                }
-            else askRange(min, max)
-        }
+val startingGuess: Guess = 1..100
 
-val numberGame2: (IO<Unit>, Int, Int) -> IO<Unit> =
-    { f: IO<Unit>, min: Int, max: Int ->
-        printlnIO("Is your number ${guess(min, max)}")
-            .bind { readLineIO() }
+val guess: (Guess) -> Int = { g -> (g.first + g.last) / 2 }
+
+val guessingGame: (Guess) -> IO<Next> = { s: Guess ->
+    val min = s.first
+    val max = s.last
+
+    if (min == max) {
+        printlnIO("Your number is $min").bind { askIfDone }
+    } else {
+        val g = guess(s)
+
+        printlnIO("Is your number $g? [y/g/l/q]")
+            .bind { readLineIO }
             .bind { a ->
-                if (a == "y") printlnIO("Do you want to play again?")
-                    .bind { readLineIO() }
-                    .bind { a2 ->
-                        if (a2 == "y") f
-                        else Unit.lift()
-                    }
-                else askRange(min, max)
+                when (a) {
+                    "y" -> askIfDone
+                    "g" -> nextGuess(Math.min(g + 1, max)..max)
+                    "l" -> nextGuess(min..Math.max(g - 1, min))
+                    "q" -> done
+                    else -> printlnIO("Invalid option").bind { nextGuess(s) }
+                }
             }
     }
+}
 
-fun recur(io: (IO<Unit>) -> IO<Unit>): IO<Unit> = TODO()
-
-fun askRange(min: Int, max: Int): IO<Unit> = printlnIO("Is it less then or greater than ${guess(min, max)}")
-    .bind { readLineIO() }
+val askIfDone: IO<Next> = printlnIO("Do you want to play again? [y/_]")
+    .bind { readLineIO }
     .bind { a2 ->
-        when (a2) {
-            "g" -> numberGame(guess(min, max), max)
-            "l" -> numberGame(min, guess(min, max))
-            else -> printlnIO("Sorry, please enter [g/l]").bind { askRange(min, max) }
-        }
+        if (a2 == "y") nextGuess(startingGuess)
+        else done
     }
 
-val prog: IO<Unit> = startGame
+val done: IO<Next> = left<Unit, Guess>(Unit).toIO()
 
-fun main(args: Array<String>) = prog()
+val nextGuess: (Guess) -> IO<Next> = { s -> right<Unit, Guess>(s).toIO() }
+
+val prog: IO<Unit> =
+    printlnIO("Pick a number between 1 and 100.")
+        .bind { guessingGame.whileRight(startingGuess) }
+        .bind { printlnIO("Play again soon!") }
+
+//val forever1: IO<Int> = { i: Int -> printlnIO(i.toString()).bind { (i + 1).toIO() } }.repeatRec(0)
+
+//val forever2: IO<Nothing> = { i: Int ->
+//    printlnIO(i.toString()).bind { Right<Nothing, Int>(i + 1).toIO() }
+//}.whileRightRec(0)
+
+fun main(args: Array<String>): Unit {
+    prog.run()
+}

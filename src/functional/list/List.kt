@@ -2,9 +2,16 @@
 
 package functional.list
 
-sealed class LinkList<out A>
+import functional.either.Either
+import functional.either.right
+import functional.maybe.just
+import functional.maybe.Maybe
+import functional.maybe.bind
+import functional.path.bind
 
-data class Link<out A> internal constructor(val head: A, val tail: LinkList<A>) : LinkList<A>() {
+sealed class LinkedList<out A>
+
+data class Cell<out A> internal constructor(val head: A, val tail: LinkedList<A>) : LinkedList<A>() {
     override fun toString(): String = (tail.buildString(StringBuilder()
         .append("[")
         .append(head)))
@@ -12,108 +19,116 @@ data class Link<out A> internal constructor(val head: A, val tail: LinkList<A>) 
         .toString()
 }
 
-object Nil : LinkList<Nothing>() {
+object End : LinkedList<Nothing>() {
     override fun toString(): String = "[]"
 }
 
-data class LinkListBuilder<A> internal constructor(val next: LinkListBuilder<A>?, private val head: A) {
-    internal fun build(tail: LinkList<A>): LinkList<A> = Link(head, tail).let { next?.build(it) ?: it }
+fun <A> linkedListOf(vararg s: A): LinkedList<A> = s.foldRight(End, ::Cell)
+
+fun <T> LinkedList<T>.buildString(stringBuilder: StringBuilder): StringBuilder = when (this) {
+    End -> stringBuilder
+    is Cell -> tail.buildString(stringBuilder.append(", ").append(head))
 }
 
-infix fun <T> T.l(next: T): LinkListBuilder<T> = LinkListBuilder(LinkListBuilder(null, this), next)
-infix fun <T> T.l(next: LinkList<Nothing>): LinkList<T> = Link(this, next)
-infix fun <T> LinkListBuilder<T>.l(next: T): LinkListBuilder<T> = LinkListBuilder(this, next)
-infix fun <T> LinkListBuilder<T>.l(next: LinkList<Nothing>): LinkList<T> = build(next)
-
-fun <T> LinkList<T>.buildString(stringBuilder: StringBuilder): StringBuilder = when (this) {
-    Nil -> stringBuilder
-    is Link -> tail.buildString(stringBuilder.append(", ").append(head))
+fun <T> LinkedList<T>.filter(p: (T) -> Boolean): LinkedList<T> = when (this) {
+    End -> End
+    is Cell -> if (p(head)) Cell(head, tail.filter(p)) else tail.filter(p)
 }
 
-fun <T> LinkList<T>.filter(p: (T) -> Boolean): LinkList<T> = when (this) {
-    Nil -> Nil
-    is Link -> if (p(head)) Link(head, tail.filter(p)) else tail.filter(p)
+fun <T, U> LinkedList<T>.foldl(acc: U, f: (U, T) -> U): U = when (this) {
+    End -> acc
+    is Cell -> tail.foldl(f(acc, head), f)
 }
 
-fun <T, U> LinkList<T>.foldl(f: (U, T) -> U, acc: U): U = when (this) {
-    Nil -> acc
-    is Link -> tail.foldl(f, f(acc, head))
+fun <T, U> LinkedList<T>.foldr(acc: U, f: (T, U) -> U): U = when (this) {
+    End -> acc
+    is Cell -> f(head, tail.foldr(acc, f))
 }
 
-fun <T, U> LinkList<T>.foldr(f: (T, U) -> U, acc: U): U = when (this) {
-    Nil -> acc
-    is Link -> f(head, tail.foldr(f, acc))
+fun <T> Cell<T>.reduce(f: (T, T) -> T): T = foldl(head, f)
+
+fun <T> LinkedList<T>.reverse(): LinkedList<T> = foldr(End, ::Cell)
+
+fun <T> LinkedList<T>.concat(to: LinkedList<T>): LinkedList<T> = foldr(to, ::Cell)
+
+fun <T, U> LinkedList<T>.flatMap(f: (T) -> LinkedList<U>): LinkedList<U> = when (this) {
+    End -> End
+    is Cell -> f(head).concat(tail.bind(f))
 }
 
-fun <T> Link<T>.reduce(f: (T, T) -> T): T = foldl(f, head)
+fun <T, U> LinkedList<T>.mapStackSafe(f: (T) -> U): LinkedList<U> =
+    reverse().foldl<T, LinkedList<U>>(End) { tail, head -> Cell(f(head), tail) }
 
-fun <T> LinkList<T>.reverse(): LinkList<T> = foldr(::Link, Nil)
+fun <T> LinkedList<T>.filterStackSafe(p: (T) -> Boolean): LinkedList<T> =
+    reverse().foldl<T, LinkedList<T>>(End) { tail, head ->
+        if (p(head)) Cell(head, tail.filter(p)) else tail.filter(p)
+    }
 
-fun <T> LinkList<T>.concat(to: LinkList<T>): LinkList<T> = foldr(::Link, to)
-
-fun <T, U> LinkList<T>.flatMap(f: (T) -> LinkList<U>): LinkList<U> = when (this) {
-    Nil -> Nil
-    is Link -> f(head).concat(tail.bind(f))
-}
-
-fun <T, U> LinkList<T>.mapNorec(f: (T) -> U): LinkList<U> =
-    reverse().foldl<T, LinkList<U>>({ tail, head -> Link(f(head), tail) }, Nil)
-
-fun <T> LinkList<T>.filterNorec(p: (T) -> Boolean): LinkList<T> =
-    reverse().foldl<T, LinkList<T>>(
-        { tail, head -> if (p(head)) Link(head, tail.filter(p)) else tail.filter(p) },
-        Nil)
-
-fun <T, U> LinkList<T>.foldlNorec(f: (U, T) -> U, a: U): U {
+fun <T, U> LinkedList<T>.foldlStackSafe(f: (U, T) -> U, a: U): U {
     var acc = a
-    var link = this
+    var cell = this
 
-    while (link is Link) {
-        acc = f(acc, link.head)
-        link = link.tail
+    while (cell is Cell) {
+        acc = f(acc, cell.head)
+        cell = cell.tail
     }
 
     return acc
 }
 
-fun <T, U> LinkList<T>.foldrNorec(f: (T, U) -> U, acc1: U): U =
-    reverse().foldlNorec({ acc2, head -> f(head, acc2) }, acc1)
+fun <T, U> LinkedList<T>.foldrNotRec(f: (T, U) -> U, acc1: U): U =
+    reverse().foldlStackSafe({ acc2, head -> f(head, acc2) }, acc1)
 
-fun <T> Link<T>.reduceNorec(f: (T, T) -> T): T = foldlNorec(f, head)
+fun <T> Cell<T>.reduceStackSafe(f: (T, T) -> T): T = foldlStackSafe(f, head)
 
-fun <T> LinkList<T>.reverseNorec(): LinkList<T> =
-    foldlNorec<T, LinkList<T>>({ tail, head -> Link(head, tail) }, Nil)
+fun <T> LinkedList<T>.reverseStackSafe(): LinkedList<T> =
+    foldlStackSafe<T, LinkedList<T>>({ tail, head -> Cell(head, tail) }, End)
 
-fun <T> LinkList<T>.concatNorec(to: LinkList<T>): LinkList<T> =
-    reverse().foldlNorec({ tail, head -> Link(head, tail) }, to)
+fun <T> LinkedList<T>.concatStackSafe(to: LinkedList<T>): LinkedList<T> =
+    reverse().foldlStackSafe({ tail, head -> Cell(head, tail) }, to)
 
-fun <T, U> LinkList<T>.flatMapNorec(f: (T) -> LinkList<U>): LinkList<U> = when (this) {
-    Nil -> Nil
-    is Link -> f(head).concatNorec(tail.flatMapNorec(f))
+fun <T, U> LinkedList<T>.flatMapStackSafe(f: (T) -> LinkedList<U>): LinkedList<U> = when (this) {
+    End -> End
+    is Cell -> f(head).concatStackSafe(tail.flatMapStackSafe(f))
 }
 
 // list functor function
 
-fun <A, B> LinkList<A>.fmap(f: (A) -> B): LinkList<B> = when (this) {
-    Nil -> Nil
-    is Link -> Link(f(head), tail.fmap(f))
+fun <A, B> LinkedList<A>.fmap(f: (A) -> B): LinkedList<B> = when (this) {
+    End -> End
+    is Cell -> Cell(f(head), tail.fmap(f))
 }
 
 // list applicative functions
 
-fun <A> A.lift(): LinkList<A> = Link(this, Nil)
+fun <A> A.toLinkList(): LinkedList<A> = Cell(this, End)
 
-fun <A, B> LinkList<(A) -> B>.ap(av: LinkList<A>): LinkList<B> =
-    foldr<(A) -> B, LinkList<B>>({ f, a1 -> av.foldr({ v, a2 -> Link(f(v), a2) }, a1) }, Nil)
+fun <A, B> LinkedList<(A) -> B>.ap(av: LinkedList<A>): LinkedList<B> =
+    foldr<(A) -> B, LinkedList<B>>(End) { f, a1 -> av.foldr(a1) { v, a2 -> Cell(f(v), a2) } }
 
 // list monad functions
 
-fun <A> LinkList<LinkList<A>>.join(): LinkList<A> =
-    foldr<LinkList<A>, LinkList<A>>({ x, acc -> x.foldr(::Link, acc) }, Nil)
+fun <A> LinkedList<LinkedList<A>>.join(): LinkedList<A> =
+    foldr<LinkedList<A>, LinkedList<A>>(End) { x, acc -> x.foldr(acc, ::Cell) }
 
-fun <A, B> LinkList<A>.bind(f: (A) -> LinkList<B>): LinkList<B> =
-    foldr<A, LinkList<B>>({ x, acc -> f(x).foldr(::Link, acc) }, Nil)
+fun <A, B> LinkedList<A>.bind(f: (A) -> LinkedList<B>): LinkedList<B> =
+    foldr<A, LinkedList<B>>(End) { x, acc -> f(x).foldr(acc, ::Cell) }
 
-//fun <A, B> LinkList<A>.bind2(f: (A) -> LinkList<B>): LinkList<B> = f.lift().ap(this).join()
+//fun <A, B> LinkedList<A>.bind2(f: (A) -> LinkedList<B>): LinkedList<B> = f.toLinkList().ap(this).join()
 
-//fun <A, B> LinkList<A>.bind3(f: (A) -> LinkList<B>): LinkList<B> = fmap(f).join()
+//fun <A, B> LinkedList<A>.bind3(f: (A) -> LinkedList<B>): LinkedList<B> = fmap(f).join()
+
+fun <A, B, C> ((A) -> LinkedList<B>).fish(f: (B) -> LinkedList<C>): (A) -> LinkedList<C> =
+    { x -> this(x).fmap(f).join() }
+
+fun <A, B : Any> LinkedList<A>.foldM(acc1: B, f: (B, A) -> Maybe<B>): Maybe<B> =
+    when (this) {
+        End -> just(acc1)
+        is Cell -> f(acc1, head).bind { acc2 -> tail.foldM(acc2, f) }
+    }
+
+fun <A, B, C> LinkedList<A>.foldM(acc1: B, f: (B, A) -> Either<C, B>): Either<C, B> =
+    when (this) {
+        End -> right(acc1)
+        is Cell -> f(acc1, head).bind { acc2 -> tail.foldM(acc2, f) }
+    }

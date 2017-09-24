@@ -8,7 +8,7 @@ inline fun <A, B, C> ((A) -> B).fmap(crossinline f: (B) -> C): (A) -> C = { x ->
 
 // function as applicative
 
-fun <A> A.lift(): (Any) -> A = { _ -> this }
+fun <A> A.toFunction(): (Any) -> A = { _ -> this }
 
 inline fun <A, B, C> ((A) -> (B) -> C).ap(crossinline av: (A) -> B): (A) -> C =
     { w -> this(w)(av(w)) }
@@ -21,6 +21,6 @@ inline fun <A, B, C> ((B) -> A).bind(crossinline f: (A) -> (B) -> C): (B) -> C =
     { w -> f(this(w))(w) }
 
 //fun <A, B : Any, C> ((B) -> A).bind2(f: (A) -> (B) -> C): (B) -> C =
-//    { w -> f.lift().ap(this).join(w)(w) }
+//    { w -> f.toFunction().ap(this).join(w)(w) }
 
 //fun <A, B, C> ((B) -> A).bind3(f: (A) -> (B) -> C): (B) -> C = { w -> fmap(f).join(w)(w) }

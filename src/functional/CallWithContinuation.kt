@@ -1,8 +1,10 @@
-package com.outsitenetworks.allpointsrewards.functional.experimental
+@file:Suppress("unused")
+
+package functional
 
 class CurrentContinuationThrowable(var value: Any?) : Throwable()
 
-inline fun <reified T : Any> callCc(block: ((T) -> Nothing) -> T): T {
+inline fun <reified T> callCc(block: ((T) -> Nothing) -> T): T {
     val throwable = CurrentContinuationThrowable(null)
 
     return try {

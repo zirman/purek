@@ -1,4 +1,6 @@
-package com.outsitenetworks.allpointsrewards.functional
+@file:Suppress("unused")
+
+package functional
 
 import kotlin.collections.map as collectionsMap
 
@@ -40,41 +42,36 @@ fun <T, U, P, L, E, S> ((T, U, P, L, E) -> S).curry(): (T) -> (U) -> (P) -> (L) 
 
 // compose function
 
-inline fun <A : Any, B : Any, C : Any> ((B) -> C).o(crossinline g: (A) -> B): (A) -> C =
-    { x -> this(g(x)) }
+inline fun <A, B, C> ((B) -> C).o(crossinline g: (A) -> B): (A) -> C = { x -> this(g(x)) }
 
 // application function
 
-fun <A : Any, B : Any> ((A) -> B).s(x: A): B = this(x)
-
-// pipe function
-
-inline infix fun <T : Any, U : Any> T.then(t: (T) -> U): U = t(this)
+fun <A, B> ((A) -> B).s(x: A): B = this(x)
 
 // Pair and Triple constructors
 
-infix fun <A : Any, B : Any> A.et(b: B): Pair<A, B> = Pair(this, b)
+infix fun <A, B> A.et(b: B): Pair<A, B> = Pair(this, b)
 
-infix fun <A : Any, B : Any, C : Any> Pair<A, B>.et(c: C): Triple<A, B, C> =
+infix fun <A, B, C> Pair<A, B>.et(c: C): Triple<A, B, C> =
     Triple(first, second, c)
 
 // Iterable extensions
 
 // applicative function for Iterable
 
-fun <A : Any, B : Any> Iterable<(A) -> B>.app(av: Iterable<A>): Iterable<B> =
+fun <A, B> Iterable<(A) -> B>.app(av: Iterable<A>): Iterable<B> =
     collectionsMap { f -> av.collectionsMap { v -> f(v) } }.flatten()
 
 // applicative function for Iterable
 
-inline fun <A : Any, B : Any> Iterable<A>.bind(f: (A) -> Iterable<B>): Iterable<B> =
+inline fun <A, B> Iterable<A>.bind(f: (A) -> Iterable<B>): Iterable<B> =
     collectionsMap(f).flatten()
 
 // memoize functions
 
-fun <A : Any> memoize(f: () -> A): () -> A = lazy(f)::value
+fun <A> memoize(f: () -> A): () -> A = lazy(f)::value
 
-inline fun <A : Any, B : Any> memoize(crossinline f: (A) -> B): (A) -> B {
+inline fun <A, B> memoize(crossinline f: (A) -> B): (A) -> B {
     val map = mutableMapOf<A, B>()
     return { key -> map.getOrPut(key) { f(key) } }
 }

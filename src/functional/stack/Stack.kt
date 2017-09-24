@@ -2,17 +2,17 @@
 
 package functional.stack
 
-import functional.list.Link
-import functional.list.LinkList
+import functional.list.Cell
+import functional.list.LinkedList
 import functional.state.State
 
-fun pop(): State<LinkList<Int>, Int> = { s ->
-    s as Link
+fun pop(): State<LinkedList<Int>, Int> = State { s ->
+    s as Cell
     Pair(s.head, s.tail)
 }
 
-fun push(x: Int): State<LinkList<Int>, Unit> = { s -> Pair(Unit, Link(x, s)) }
+fun push(x: Int): State<LinkedList<Int>, Unit> = State { s -> Pair(Unit, Cell(x, s)) }
 
-fun get(): State<LinkList<Int>, LinkList<Int>> = { s -> Pair(s, s) }
+fun get(): State<LinkedList<Int>, LinkedList<Int>> = State { s -> Pair(s, s) }
 
-fun put(s: LinkList<Int>): State<LinkList<Int>, Unit> = { Pair(Unit, s) }
+fun put(s: LinkedList<Int>): State<LinkedList<Int>, Unit> = State { Pair(Unit, s) }
