@@ -35,10 +35,10 @@ private data class LiftOp<out A>(val op: Op<Free<A>>) : Free<A>() {
     override fun <B> bind(f: (A) -> Free<B>): Free<B> = LiftOp(op.fmap { x -> x.bind(f) })
 }
 
-fun <A> flatten(f: Free<Free<A>>): Free<A> =
-    when (f) {
-        is Pure -> f.x
-        is LiftOp -> LiftOp(f.op.fmap { x -> x.bind { y -> y } })
+fun <A> Free<Free<A>>.flatten(): Free<A> =
+    when (this) {
+        is Pure -> x
+        is LiftOp -> LiftOp(op.fmap { x -> x.bind { y -> y } })
     }
 
 private fun <A> liftOp(op: Op<A>): Free<A> = LiftOp(op.fmap(::Pure))
