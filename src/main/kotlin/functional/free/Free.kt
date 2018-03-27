@@ -14,6 +14,10 @@ private data class Bell<out A>(val x: A) : Op<A>() {
     override fun <B> fmap(f: (A) -> B): Op<B> = Bell(f(x))
 }
 
+private data class Input<out A>(val g: () -> A) : Op<A>() {
+    override fun <B> fmap(f: (A) -> B): Op<B> = Input { f(g()) }
+}
+
 private object Done : Op<Nothing>() {
     override fun <B> fmap(f: (Nothing) -> B): Op<B> = Done
 }
@@ -44,6 +48,7 @@ fun <A> Free<Free<A>>.flatten(): Free<A> =
 private fun <A> liftOp(op: Op<A>): Free<A> = LiftOp(op.fmap(::Pure))
 
 fun <A> output(output: A): Free<Unit> = liftOp(Output(output, Unit))
+val input: Free<String> = liftOp(Input { readLine()!! })
 val bell: Free<Unit> = liftOp(Bell(Unit))
 val done: Free<Unit> = liftOp(Done)
 
@@ -55,6 +60,11 @@ val program2 =
     subroutine
         .next(bell.fmap { _ -> 3 })
         .bind(::output)
+        .next(input)
+        .bind { x -> Pure(x) }
+        //.bind { input().fm }
+
+//        .bind { x -> if }
         .next(done)
 
 fun <A> showProgram(f: Free<A>): String =
@@ -63,7 +73,25 @@ fun <A> showProgram(f: Free<A>): String =
         is LiftOp<A> ->
             when (f.op) {
                 is Done -> "done\n"
+                is Input -> "input"
                 is Bell -> "bell\n${showProgram(f.op.x)}"
                 is Output<*, Free<A>> -> "output ${f.op.output}\n${showProgram(f.op.x)}"
             }
     }
+
+fun <A> runProgram(f: Free<A>, c: (A) -> Unit): Unit {
+    when (f) {
+        is Pure -> c(f.x)
+        is LiftOp<A> ->
+            when (f.op) {
+                is Done -> {
+                }
+                is Input -> {
+                    f.op.g.invoke().fmap(c)
+//                    f.op.x
+                }
+                is Bell -> "bell\n${showProgram(f.op.x)}"
+                is Output<*, Free<A>> -> "output ${f.op.output}\n${showProgram(f.op.x)}"
+            }
+    }
+}
